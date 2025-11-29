@@ -10,30 +10,43 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef(null)
 
   // 从本地存储加载对话历史
   useEffect(() => {
     const savedMessages = localStorage.getItem('deepseek-chat-history')
     if (savedMessages) {
-      setMessages(JSON.parse(savedMessages))
+      try {
+        setMessages(JSON.parse(savedMessages))
+      } catch (e) {
+        console.error('Failed to parse saved messages:', e)
+      }
     }
   }, [])
 
   // 保存对话历史到本地存储
   useEffect(() => {
-    localStorage.setItem('deepseek-chat-history', JSON.stringify(messages))
+    if (messages.length > 0) {
+      localStorage.setItem('deepseek-chat-history', JSON.stringify(messages))
+    }
   }, [messages])
+
+  // 自动滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return
 
     const userMessage = {
       role: 'user',
-      content: inputMessage,
+      content: inputMessage.trim(),
       timestamp: new Date().toISOString()
     }
 
-    setMessages(prev => [...prev, userMessage])
+    const updatedMessages = [...messages, userMessage]
+    setMessages(updatedMessages)
     setInputMessage('')
     setIsLoading(true)
 
@@ -44,10 +57,17 @@ export default function ChatWidget() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: inputMessage,
-          conversationHistory: messages.slice(-10)
+          message: inputMessage.trim(),
+          conversationHistory: updatedMessages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
         })
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const data = await response.json()
 
@@ -55,8 +75,8 @@ export default function ChatWidget() {
         role: 'assistant',
         content: data.response,
         timestamp: new Date().toISOString(),
-        relevantPosts: data.relevantPosts,
-        usedMathModel: data.usedMathModel
+        relevantPosts: data.relevantPosts || [],
+        usedMathModel: data.usedMathModel || false
       }
 
       setMessages(prev => [...prev, aiMessage])
@@ -65,7 +85,7 @@ export default function ChatWidget() {
       
       const errorMessage = {
         role: 'assistant',
-        content: '抱歉，出现了错误。请稍后重试。',
+        content: '抱歉，出现了网络错误。请检查网络连接后重试。',
         timestamp: new Date().toISOString(),
         isError: true
       }
@@ -117,6 +137,7 @@ export default function ChatWidget() {
                 placeholder="输入您的问题..."
                 disabled={isLoading}
                 rows={3}
+                className="chat-textarea"
               />
               <button 
                 onClick={handleSendMessage} 
@@ -130,6 +151,8 @@ export default function ChatWidget() {
               💡 自动检测数学问题并使用 DeepSeek Math 模型
             </div>
           </div>
+          
+          <div ref={messagesEndRef} />
         </div>
       )}
     </>
