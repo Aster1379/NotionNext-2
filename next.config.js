@@ -1,348 +1,327 @@
-/** @type {import('next').NextConfig} */
-const path = require('path')
+const { THEME } = require('./blog.config')
 const fs = require('fs')
+const path = require('path')
+const BLOG = require('./blog.config')
+const { extractLangPrefix } = require('./lib/utils/pageId')
 
-// 尝试加载 blog.config，如果失败则使用默认值
-let BLOG = {}
-try {
-  BLOG = require('./blog.config')
-} catch (error) {
-  console.warn('blog.config.js not found or invalid, using defaults')
-  BLOG = {
-    LANG: 'zh-CN',
-    NOTION_PAGE_ID: process.env.NOTION_PAGE_ID || '',
-    BUNDLE_ANALYZER: false
-  }
-}
+// 打包时是否分析代码
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: BLOG.BUNDLE_ANALYZER
+})
 
-// 安全地获取主题
-const THEME = (function() {
-  try {
-    // 检查主题目录是否存在
-    const themePath = path.resolve(__dirname, 'themes')
-    if (!fs.existsSync(themePath)) {
-      return process.env.THEME || 'default'
-    }
-    
-    // 尝试从 blog.config 获取主题
-    if (BLOG.THEME) return BLOG.THEME
-    
-    // 扫描可用主题
-    const themes = fs.readdirSync(themePath).filter(file => {
-      const fullPath = path.join(themePath, file)
-      return fs.statSync(fullPath).isDirectory()
-    })
-    
-    return themes.includes('default') ? 'default' : (themes[0] || 'default')
-  } catch (error) {
-    console.warn('Error detecting theme:', error.message)
-    return 'default'
-  }
-})()
+// 扫描项目 /themes下的目录名
+const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
 
-// 安全的语言检测
-const locales = (function() {
-  const defaultLang = BLOG.LANG || 'zh-CN'
-  const langs = [defaultLang]
-  
-  try {
-    const pageId = BLOG.NOTION_PAGE_ID || process.env.NOTION_PAGE_ID || ''
-    if (pageId && pageId.includes(',')) {
-      const siteIds = pageId.split(',')
-      for (const siteId of siteIds) {
-        // 简单的语言前缀检测
-        const match = siteId.match(/^([a-z]{2}):/)
-        if (match && !langs.includes(match[1])) {
-          langs.push(match[1])
+// 检测用户开启的多语言
+const locales = (function () {
+  // 根据BLOG_NOTION_PAGE_ID 检查支持多少种语言数据.
+  // 支持如下格式配置多个语言的页面id xxx,zh:xxx,en:xxx
+  const langs = [BLOG.LANG]
+  if (BLOG.NOTION_PAGE_ID && BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+    const siteIds = BLOG.NOTION_PAGE_ID.split(',')
+    for (let index = 0; index < siteIds.length; index++) {
+      const siteId = siteIds[index]
+      const prefix = extractLangPrefix(siteId)
+      // 如果包含前缀 例如 zh , en 等
+      if (prefix) {
+        if (!langs.includes(prefix)) {
+          langs.push(prefix)
         }
       }
     }
-  } catch (error) {
-    console.warn('Error detecting locales:', error.message)
   }
-  
   return langs
 })()
 
-// 只有在非导出构建时启用多语言
-const i18nConfig = (function() {
-  if (process.env.EXPORT || process.env.NEXT_BUILD_STANDALONE) {
-    return undefined
-  }
-  
-  if (locales.length <= 1) {
-    return undefined
-  }
-  
-  return {
-    defaultLocale: locales[0],
-    locales: locales
+// 编译前执行
+// 修复：移除非函数调用中的函数声明，改为立即执行
+;(function preBuild() {
+  // 只在构建阶段执行
+  if (process.env.NEXT_PHASE === 'phase-production-build' || 
+      process.env.npm_lifecycle_event === 'build' || 
+      process.env.npm_lifecycle_event === 'export') {
+    
+    // 删除 public/sitemap.xml 文件 ； 否则会和/pages/sitemap.xml.js 冲突。
+    const sitemapPath = path.resolve(__dirname, 'public', 'sitemap.xml')
+    if (fs.existsSync(sitemapPath)) {
+      fs.unlinkSync(sitemapPath)
+      console.log('Deleted existing sitemap.xml from public directory')
+    }
+
+    const sitemap2Path = path.resolve(__dirname, 'sitemap.xml')
+    if (fs.existsSync(sitemap2Path)) {
+      fs.unlinkSync(sitemap2Path)
+      console.log('Deleted existing sitemap.xml from root directory')
+    }
   }
 })()
 
-// 动态导入 bundle analyzer，避免影响构建
-const withBundleAnalyzer = (function() {
-  try {
-    return require('@next/bundle-analyzer')({
-      enabled: BLOG.BUNDLE_ANALYZER === true || process.env.ANALYZE === 'true'
-    })
-  } catch (error) {
-    // 返回一个透明包装器
-    return config => config
+/**
+ * 扫描指定目录下的文件夹名，用于获取所有主题
+ * @param {*} directory
+ * @returns
+ */
+function scanSubdirectories(directory) {
+  const subdirectories = []
+
+  // 确保目录存在
+  if (!fs.existsSync(directory)) {
+    console.warn(`Directory ${directory} does not exist`)
+    return subdirectories
   }
-})()
+
+  fs.readdirSync(directory).forEach(file => {
+    const fullPath = path.join(directory, file)
+    try {
+      const stats = fs.statSync(fullPath)
+      if (stats.isDirectory()) {
+        subdirectories.push(file)
+      }
+    } catch (error) {
+      console.warn(`Error reading directory ${fullPath}:`, error.message)
+    }
+  })
+
+  return subdirectories
+}
+
+/**
+ * @type {import('next').NextConfig}
+ */
 
 const nextConfig = {
-  // 构建检查配置
   eslint: {
     ignoreDuringBuilds: true
   },
-  typescript: {
-    ignoreBuildErrors: true
-  },
   
-  // 输出配置
-  output: process.env.NEXT_BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
+  // 修复：Vercel 不支持 export 输出模式，统一使用 standalone
+  output: process.env.VERCEL ? 'standalone' : 
+    (process.env.EXPORT ? 'export' : 
+      (process.env.NEXT_BUILD_STANDALONE === 'true' ? 'standalone' : undefined)),
   
-  // 构建超时设置
-  staticPageGenerationTimeout: 300,
-  
-  // 性能优化
+  staticPageGenerationTimeout: 120,
+
+  // 性能优化配置
   compress: true,
   poweredByHeader: false,
   generateEtags: true,
+
+  // 构建优化
   swcMinify: true,
-  
-  // 模块优化
   modularizeImports: {
     '@heroicons/react/24/outline': {
       transform: '@heroicons/react/24/outline/{{member}}'
     },
     '@heroicons/react/24/solid': {
       transform: '@heroicons/react/24/solid/{{member}}'
-    },
-    'lodash-es': {
-      transform: 'lodash-es/{{member}}'
     }
   },
   
-  // 多语言配置
-  i18n: i18nConfig,
+  // 修复：Vercel 环境下禁用 i18n（如果需要启用，需正确配置）
+  i18n: process.env.VERCEL || process.env.EXPORT
+    ? undefined
+    : {
+        defaultLocale: BLOG.LANG,
+        // 支持的所有多语言,按需填写即可
+        locales: locales
+      },
   
-  // 图片配置
   images: {
-    // Vercel 环境下让平台处理优化
-    unoptimized: process.env.VERCEL === '1' ? false : BLOG.IMAGE_UNOPTIMIZED === true,
+    // 修复：Vercel 自动优化图片，设置 unoptimized
+    unoptimized: process.env.VERCEL ? true : false,
     
-    // 图片格式优化
+    // 图片压缩和格式优化
     formats: ['image/avif', 'image/webp'],
     
-    // 响应式图片尺寸
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    // 图片尺寸优化
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     
-    // 允许的域名
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**.notion.so',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'gravatar.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.githubusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'p1.qhimg.com',
-      },
-    ].filter(Boolean),
+    // 允许next/image加载的图片 域名
+    domains: [
+      'gravatar.com',
+      'www.notion.so',
+      'avatars.githubusercontent.com',
+      'images.unsplash.com',
+      'source.unsplash.com',
+      'p1.qhimg.com',
+      'webmention.io',
+      'ko-fi.com'
+    ],
     
-    // 最低缓存时间
-    minimumCacheTTL: 60 * 60 * 24,
+    // 图片加载器优化
+    loader: 'default',
+    
+    // 图片缓存优化
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7天
+    
+    // 危险的允许SVG
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;"
   },
+
+  // 默认将feed重定向至 /public/rss/feed.xml
+  redirects: process.env.VERCEL || process.env.EXPORT
+    ? undefined
+    : () => {
+        return [
+          {
+            source: '/feed',
+            destination: '/rss/feed.xml',
+            permanent: true
+          }
+        ]
+      },
   
-  // 重定向配置
-  async redirects() {
-    if (process.env.EXPORT) return []
-    
-    const redirects = []
-    
-    // RSS 重定向
-    if (BLOG.ENABLE_RSS !== false) {
-      redirects.push({
-        source: '/feed',
-        destination: '/rss/feed.xml',
-        permanent: true,
-      })
-    }
-    
-    return redirects
-  },
-  
-  // 重写规则
-  async rewrites() {
-    if (process.env.EXPORT) return []
-    
-    const rewrites = []
-    
-    // 多语言路径重写
-    if (locales.length > 1) {
-      const langPattern = locales.join('|')
-      rewrites.push(
-        {
-          source: `/:locale(${langPattern})/:path*`,
-          destination: '/:path*',
-        },
-        {
-          source: `/:locale(${langPattern})`,
-          destination: '/',
+  // 重写url
+  rewrites: process.env.VERCEL || process.env.EXPORT
+    ? undefined
+    : () => {
+        // 处理多语言重定向
+        const langsRewrites = []
+        if (BLOG.NOTION_PAGE_ID && BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+          const siteIds = BLOG.NOTION_PAGE_ID.split(',')
+          const langs = []
+          for (let index = 0; index < siteIds.length; index++) {
+            const siteId = siteIds[index]
+            const prefix = extractLangPrefix(siteId)
+            // 如果包含前缀 例如 zh , en 等
+            if (prefix) {
+              langs.push(prefix)
+            }
+            console.log('[Locales]', siteId)
+          }
+
+          // 映射多语言
+          if (langs.length > 0) {
+            langsRewrites.push(
+              {
+                source: `/:locale(${langs.join('|')})/:path*`,
+                destination: '/:path*'
+              },
+              // 匹配没有路径的情况，例如 [domain]/zh 或 [domain]/en
+              {
+                source: `/:locale(${langs.join('|')})`,
+                destination: '/'
+              },
+              // 匹配没有路径的情况，例如 [domain]/zh/ 或 [domain]/en/
+              {
+                source: `/:locale(${langs.join('|')})/`,
+                destination: '/'
+              }
+            )
+          }
         }
-      )
-    }
-    
-    // 静态页面重写
-    rewrites.push({
-      source: '/:path*.html',
-      destination: '/:path*',
-    })
-    
-    return rewrites
-  },
-  
-  // 自定义 headers
-  async headers() {
-    if (process.env.EXPORT) return []
-    
-    return [
-      {
-        source: '/:path*',
-        headers: [
+
+        return [
+          ...langsRewrites,
+          // 伪静态重写
           {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin'
-          },
-          // CORS 头
-          {
-            key: 'Access-Control-Allow-Origin',
-            value: '*'
-          },
-          {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET, POST, OPTIONS'
-          },
-        ],
+            source: '/:path*.html',
+            destination: '/:path*'
+          }
+        ]
       },
-    ]
-  },
   
-  // Webpack 配置
-  webpack: (config, { dev, isServer, webpack }) => {
-    // 主题别名
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@': path.resolve(__dirname),
-      '@theme-components': path.resolve(__dirname, 'themes', THEME),
+  headers: process.env.VERCEL || process.env.EXPORT
+    ? undefined
+    : () => {
+        return [
+          {
+            source: '/:path*{/}?',
+            headers: [
+              // 为了博客兼容性，不做过多安全限制
+              { key: 'Access-Control-Allow-Credentials', value: 'true' },
+              { key: 'Access-Control-Allow-Origin', value: '*' },
+              {
+                key: 'Access-Control-Allow-Methods',
+                value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT'
+              },
+              {
+                key: 'Access-Control-Allow-Headers',
+                value:
+                  'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+              }
+            ]
+          }
+        ]
+      },
+  
+  webpack: (config, { dev, isServer }) => {
+    // 动态主题：添加 resolve.alias 配置，将动态路径映射到实际路径
+    config.resolve.alias['@'] = path.resolve(__dirname)
+
+    if (!isServer) {
+      console.log('[默认主题]', path.resolve(__dirname, 'themes', THEME))
     }
     
-    // 优化模块解析
-    config.resolve.modules = [
-      path.resolve(__dirname, 'node_modules'),
-      'node_modules',
-    ]
-    
-    // 开发环境 source map
-    if (dev) {
-      config.devtool = 'eval-source-map'
-    }
-    
-    // 生产环境优化
-    if (!dev && !isServer) {
+    config.resolve.alias['@theme-components'] = path.resolve(
+      __dirname,
+      'themes',
+      THEME
+    )
+
+    // 性能优化配置
+    if (!dev) {
+      // 生产环境优化
       config.optimization = {
         ...config.optimization,
         splitChunks: {
           chunks: 'all',
           cacheGroups: {
-            defaultVendors: {
+            vendor: {
               test: /[\\/]node_modules[\\/]/,
-              priority: -10,
-              reuseExistingChunk: true,
+              name: 'vendors',
+              chunks: 'all',
             },
-            default: {
+            common: {
+              name: 'common',
               minChunks: 2,
-              priority: -20,
-              reuseExistingChunk: true,
+              chunks: 'all',
+              enforce: true,
             },
           },
         },
       }
     }
-    
+
+    // Enable source maps in development mode
+    if (dev || process.env.NODE_ENV_API === 'development') {
+      config.devtool = 'eval-source-map'
+    }
+
+    // 优化模块解析
+    config.resolve.modules = [
+      path.resolve(__dirname, 'node_modules'),
+      'node_modules'
+    ]
+
     return config
   },
   
-  // 实验性功能
   experimental: {
-    // 滚动恢复
-    scrollRestoration: BLOG.ENABLE_SCROLL_RESTORATION !== false,
-    
-    // 优化包导入
-    optimizePackageImports: ['@heroicons/react', 'lodash', 'date-fns'],
-    
-    // 提升构建性能
-    externalDir: true,
-    
-    // 优化服务器组件
-    serverComponentsExternalPackages: ['sharp', 'onnxruntime-node'],
+    scrollRestoration: true,
+    // 性能优化实验性功能
+    optimizePackageImports: ['@heroicons/react', 'lodash']
   },
   
-  // 页面排除规则（静态导出时）
-  exportPathMap: async function(defaultPathMap, { dev, dir, outDir, distDir, buildId }) {
-    if (!process.env.EXPORT) {
-      return defaultPathMap
-    }
-    
-    // 静态导出时排除动态页面
-    const { defaultPathMap: paths } = defaultPathMap
-    const excludePaths = ['/sitemap.xml', '/auth', '/api/**']
-    
-    for (const path of excludePaths) {
-      delete paths[path]
-    }
-    
-    return paths
+  exportPathMap: function (
+    defaultPathMap,
+    { dev, dir, outDir, distDir, buildId }
+  ) {
+    // export 静态导出时 忽略/pages/sitemap.xml.js ， 否则和getServerSideProps这个动态文件冲突
+    const pages = { ...defaultPathMap }
+    delete pages['/sitemap.xml']
+    delete pages['/auth']
+    return pages
   },
   
-  // 环境变量
-  env: {
-    NEXT_PUBLIC_THEME: THEME,
-    NEXT_PUBLIC_AVAILABLE_LOCALES: JSON.stringify(locales),
-  },
-  
-  // 生产环境配置
-  productionBrowserSourceMaps: BLOG.SOURCE_MAPS === true,
-  
-  // 允许的构建时间
-  onDemandEntries: {
-    maxInactiveAge: 60 * 60 * 1000,
-    pagesBufferLength: 5,
-  },
+  publicRuntimeConfig: {
+    // 这里的配置既可以服务端获取到，也可以在浏览器端获取到
+    THEMES: themes
+  }
 }
 
-// 应用 bundle analyzer（如果启用）
-module.exports = withBundleAnalyzer(nextConfig)
+module.exports = process.env.ANALYZE
+  ? withBundleAnalyzer(nextConfig)
+  : nextConfig
