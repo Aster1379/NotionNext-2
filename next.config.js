@@ -11,13 +11,12 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 // 扫描项目 /themes下的目录名
 const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
-
 // 检测用户开启的多语言
 const locales = (function () {
   // 根据BLOG_NOTION_PAGE_ID 检查支持多少种语言数据.
   // 支持如下格式配置多个语言的页面id xxx,zh:xxx,en:xxx
   const langs = [BLOG.LANG]
-  if (BLOG.NOTION_PAGE_ID && BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+  if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
     const siteIds = BLOG.NOTION_PAGE_ID.split(',')
     for (let index = 0; index < siteIds.length; index++) {
       const siteId = siteIds[index]
@@ -34,25 +33,25 @@ const locales = (function () {
 })()
 
 // 编译前执行
-// 修复：移除非函数调用中的函数声明，改为立即执行
-;(function preBuild() {
-  // 只在构建阶段执行
-  if (process.env.NEXT_PHASE === 'phase-production-build' || 
-      process.env.npm_lifecycle_event === 'build' || 
-      process.env.npm_lifecycle_event === 'export') {
-    
-    // 删除 public/sitemap.xml 文件 ； 否则会和/pages/sitemap.xml.js 冲突。
-    const sitemapPath = path.resolve(__dirname, 'public', 'sitemap.xml')
-    if (fs.existsSync(sitemapPath)) {
-      fs.unlinkSync(sitemapPath)
-      console.log('Deleted existing sitemap.xml from public directory')
-    }
+// eslint-disable-next-line no-unused-vars
+const preBuild = (function () {
+  if (
+    !process.env.npm_lifecycle_event === 'export' &&
+    !process.env.npm_lifecycle_event === 'build'
+  ) {
+    return
+  }
+  // 删除 public/sitemap.xml 文件 ； 否则会和/pages/sitemap.xml.js 冲突。
+  const sitemapPath = path.resolve(__dirname, 'public', 'sitemap.xml')
+  if (fs.existsSync(sitemapPath)) {
+    fs.unlinkSync(sitemapPath)
+    console.log('Deleted existing sitemap.xml from public directory')
+  }
 
-    const sitemap2Path = path.resolve(__dirname, 'sitemap.xml')
-    if (fs.existsSync(sitemap2Path)) {
-      fs.unlinkSync(sitemap2Path)
-      console.log('Deleted existing sitemap.xml from root directory')
-    }
+  const sitemap2Path = path.resolve(__dirname, 'sitemap.xml')
+  if (fs.existsSync(sitemap2Path)) {
+    fs.unlinkSync(sitemap2Path)
+    console.log('Deleted existing sitemap.xml from root directory')
   }
 })()
 
@@ -64,22 +63,14 @@ const locales = (function () {
 function scanSubdirectories(directory) {
   const subdirectories = []
 
-  // 确保目录存在
-  if (!fs.existsSync(directory)) {
-    console.warn(`Directory ${directory} does not exist`)
-    return subdirectories
-  }
-
   fs.readdirSync(directory).forEach(file => {
     const fullPath = path.join(directory, file)
-    try {
-      const stats = fs.statSync(fullPath)
-      if (stats.isDirectory()) {
-        subdirectories.push(file)
-      }
-    } catch (error) {
-      console.warn(`Error reading directory ${fullPath}:`, error.message)
+    const stats = fs.statSync(fullPath)
+    if (stats.isDirectory()) {
+      subdirectories.push(file)
     }
+
+    // subdirectories.push(file)
   })
 
   return subdirectories
@@ -93,12 +84,11 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true
   },
-  
-  // 修复：Vercel 不支持 export 输出模式，统一使用 standalone
-  output: process.env.VERCEL ? 'standalone' : 
-    (process.env.EXPORT ? 'export' : 
-      (process.env.NEXT_BUILD_STANDALONE === 'true' ? 'standalone' : undefined)),
-  
+  output: process.env.EXPORT
+    ? 'export'
+    : process.env.NEXT_BUILD_STANDALONE === 'true'
+      ? 'standalone'
+      : undefined,
   staticPageGenerationTimeout: 120,
 
   // 性能优化配置
@@ -116,27 +106,20 @@ const nextConfig = {
       transform: '@heroicons/react/24/solid/{{member}}'
     }
   },
-  
-  // 修复：Vercel 环境下禁用 i18n（如果需要启用，需正确配置）
-  i18n: process.env.VERCEL || process.env.EXPORT
+  // 多语言， 在export时禁用
+  i18n: process.env.EXPORT
     ? undefined
     : {
         defaultLocale: BLOG.LANG,
         // 支持的所有多语言,按需填写即可
         locales: locales
       },
-  
   images: {
-    // 修复：Vercel 自动优化图片，设置 unoptimized
-    unoptimized: process.env.VERCEL ? true : false,
-    
     // 图片压缩和格式优化
     formats: ['image/avif', 'image/webp'],
-    
     // 图片尺寸优化
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    
     // 允许next/image加载的图片 域名
     domains: [
       'gravatar.com',
@@ -148,20 +131,17 @@ const nextConfig = {
       'webmention.io',
       'ko-fi.com'
     ],
-    
     // 图片加载器优化
     loader: 'default',
-    
     // 图片缓存优化
     minimumCacheTTL: 60 * 60 * 24 * 7, // 7天
-    
     // 危险的允许SVG
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;"
   },
 
   // 默认将feed重定向至 /public/rss/feed.xml
-  redirects: process.env.VERCEL || process.env.EXPORT
+  redirects: process.env.EXPORT
     ? undefined
     : () => {
         return [
@@ -172,14 +152,13 @@ const nextConfig = {
           }
         ]
       },
-  
   // 重写url
-  rewrites: process.env.VERCEL || process.env.EXPORT
+  rewrites: process.env.EXPORT
     ? undefined
     : () => {
         // 处理多语言重定向
         const langsRewrites = []
-        if (BLOG.NOTION_PAGE_ID && BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+        if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
           const siteIds = BLOG.NOTION_PAGE_ID.split(',')
           const langs = []
           for (let index = 0; index < siteIds.length; index++) {
@@ -193,24 +172,23 @@ const nextConfig = {
           }
 
           // 映射多语言
-          if (langs.length > 0) {
-            langsRewrites.push(
-              {
-                source: `/:locale(${langs.join('|')})/:path*`,
-                destination: '/:path*'
-              },
-              // 匹配没有路径的情况，例如 [domain]/zh 或 [domain]/en
-              {
-                source: `/:locale(${langs.join('|')})`,
-                destination: '/'
-              },
-              // 匹配没有路径的情况，例如 [domain]/zh/ 或 [domain]/en/
-              {
-                source: `/:locale(${langs.join('|')})/`,
-                destination: '/'
-              }
-            )
-          }
+          // 示例： source: '/:locale(zh|en)/:path*' ; :locale() 会将语言放入重写后的 `?locale=` 中。
+          langsRewrites.push(
+            {
+              source: `/:locale(${langs.join('|')})/:path*`,
+              destination: '/:path*'
+            },
+            // 匹配没有路径的情况，例如 [domain]/zh 或 [domain]/en
+            {
+              source: `/:locale(${langs.join('|')})`,
+              destination: '/'
+            },
+            // 匹配没有路径的情况，例如 [domain]/zh/ 或 [domain]/en/
+            {
+              source: `/:locale(${langs.join('|')})/`,
+              destination: '/'
+            }
+          )
         }
 
         return [
@@ -222,8 +200,7 @@ const nextConfig = {
           }
         ]
       },
-  
-  headers: process.env.VERCEL || process.env.EXPORT
+  headers: process.env.EXPORT
     ? undefined
     : () => {
         return [
@@ -242,11 +219,58 @@ const nextConfig = {
                 value:
                   'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
               }
+              // 安全头部 相关配置，谨慎开启
+            //   { key: 'X-Frame-Options', value: 'DENY' },
+            //   { key: 'X-Content-Type-Options', value: 'nosniff' },
+            //   { key: 'X-XSS-Protection', value: '1; mode=block' },
+            //   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+            //   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+            //   {
+            //     key: 'Strict-Transport-Security',
+            //     value: 'max-age=31536000; includeSubDomains; preload'
+            //   },
+            //   {
+            //     key: 'Content-Security-Policy',
+            //     value: [
+            //       "default-src 'self'",
+            //       "script-src 'self' 'unsafe-inline' 'unsafe-eval' *.googleapis.com *.gstatic.com *.google-analytics.com *.googletagmanager.com",
+            //       "style-src 'self' 'unsafe-inline' *.googleapis.com *.gstatic.com",
+            //       "img-src 'self' data: blob: *.notion.so *.unsplash.com *.githubusercontent.com *.gravatar.com",
+            //       "font-src 'self' *.googleapis.com *.gstatic.com",
+            //       "connect-src 'self' *.google-analytics.com *.googletagmanager.com",
+            //       "frame-src 'self' *.youtube.com *.vimeo.com",
+            //       "object-src 'none'",
+            //       "base-uri 'self'",
+            //       "form-action 'self'"
+            //     ].join('; ')
+            //   },
+
+            //   // CORS 配置（更严格）
+            //   { key: 'Access-Control-Allow-Credentials', value: 'false' },
+            //   {
+            //     key: 'Access-Control-Allow-Origin',
+            //     value: process.env.NODE_ENV === 'production'
+            //       ? siteConfig('LINK') || 'https://yourdomain.com'
+            //       : '*'
+            //   },
+            //   { key: 'Access-Control-Max-Age', value: '86400' }
             ]
-          }
+          },
+            //   {
+            //     source: '/api/:path*',
+            //     headers: [
+            //       // API 特定的安全头部
+            //       { key: 'X-Frame-Options', value: 'DENY' },
+            //       { key: 'X-Content-Type-Options', value: 'nosniff' },
+            //       { key: 'Cache-Control', value: 'no-store, max-age=0' },
+            //       {
+            //         key: 'Access-Control-Allow-Methods',
+            //         value: 'GET,POST,PUT,DELETE,OPTIONS'
+            //       }
+            //     ]
+            //   }
         ]
       },
-  
   webpack: (config, { dev, isServer }) => {
     // 动态主题：添加 resolve.alias 配置，将动态路径映射到实际路径
     config.resolve.alias['@'] = path.resolve(__dirname)
@@ -254,7 +278,6 @@ const nextConfig = {
     if (!isServer) {
       console.log('[默认主题]', path.resolve(__dirname, 'themes', THEME))
     }
-    
     config.resolve.alias['@theme-components'] = path.resolve(
       __dirname,
       'themes',
@@ -298,13 +321,11 @@ const nextConfig = {
 
     return config
   },
-  
   experimental: {
     scrollRestoration: true,
     // 性能优化实验性功能
     optimizePackageImports: ['@heroicons/react', 'lodash']
   },
-  
   exportPathMap: function (
     defaultPathMap,
     { dev, dir, outDir, distDir, buildId }
@@ -315,7 +336,6 @@ const nextConfig = {
     delete pages['/auth']
     return pages
   },
-  
   publicRuntimeConfig: {
     // 这里的配置既可以服务端获取到，也可以在浏览器端获取到
     THEMES: themes
