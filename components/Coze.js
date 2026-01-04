@@ -12,7 +12,7 @@ export default function Coze() {
   const title = siteConfig('COZE_TITLE', 'NotionNext助手')
   const botId = siteConfig('COZE_BOT_ID')
   // 新增PAT token配置项（需要你从Coze控制台获取）
-  const cozeToken = siteConfig('COZE_PAT_TOKEN', 'pat_Wq3suBwaP7yhlLDCtUTKvxEiazya9rHrTkSRov0cn0lMucdTkR9y4JxbUqAfbsDr')
+  const cozeToken = siteConfig('COZE_PAT_TOKEN')
 
   const loadCoze = async () => {
     await loadExternalResource(cozeSrc)
