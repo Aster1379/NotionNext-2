@@ -29,7 +29,7 @@ const BLOG = {
   // blog.config.js 示例
 
   COZE_BOT_ID: process.env.COZE_BOT_ID || '7591009318518964262', // 正确的新ID
-  COZE_PAT_TOKEN: process.env.COZE_PAT_TOKEN || 'cztei_ljkEPWlM9R9hDQU1d3JNPa84evBTYLAxxixCrB5d2iejXHakEZ2n4lLdLO5njoxah',
+  COZE_PAT_TOKEN: process.env.COZE_PAT_TOKEN || 'cztei_ljFJsuz9YGsH8NP7hkNHsprLDmNRcbgm1cRElskPX28A5fRDZzmRHfY3BkqNvnSEe',
 
 
   // 其它复杂配置
