@@ -27,7 +27,7 @@ export default function Coze() {
             isIframe: false,
           },
           auth: {
-            type: 'token',
+            type: 'pat_token',
             token: patToken,
             onRefreshToken: async () => patToken // 简化为直接返回原令牌
           },
