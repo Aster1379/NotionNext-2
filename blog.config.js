@@ -26,6 +26,11 @@ const BLOG = {
 
   // RSS订阅
   ENABLE_RSS: process.env.NEXT_PUBLIC_ENABLE_RSS || true, // 是否开启RSS订阅功能
+  // blog.config.js 示例
+
+  COZE_BOT_ID: process.env.COZE_BOT_ID || '7591009318518964262', // 正确的新ID
+  COZE_PAT_TOKEN: process.env.COZE_PAT_TOKEN || 'cztei_ljkEPWlM9R9hDQU1d3JNPa84evBTYLAxxixCrB5d2iejXHakEZ2n4lLdLO5njoxah',
+
 
   // 其它复杂配置
   // 原配置文件过长，且并非所有人都会用到，故此将配置拆分到/conf/目录下, 按需找到对应文件并修改即可
