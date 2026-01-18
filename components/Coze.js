@@ -3,103 +3,122 @@ import { loadExternalResource } from '@/lib/utils'
 import { useEffect } from 'react'
 
 export default function Coze() {
-  // 使用最新稳定版SDK
+  // 1. 加载SDK（使用与Playground一致的稳定版本）
   const cozeSrc = siteConfig(
     'COZE_SRC_URL',
     'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0/libs/cn/index.js'
   )
-  const title = siteConfig('COZE_TITLE', 'NotionNext助手')
-  const botId = siteConfig('COZE_BOT_ID') // 确保与Playground测试成功的ID一致
-  const cozeToken = siteConfig('COZE_PAT_TOKEN', '') // 务必已替换为Playground测试成功的新令牌
 
-  // 修复：移除之前有问题的refreshToken函数
-  // const refreshToken = async () => cozeToken // 旧代码，已删除
+  // 2. 从环境变量读取配置（关键：与Playground测试成功的值完全相同）
+  const botId = siteConfig('COZE_BOT_ID', '7591009318518964262') // 务必与Playground的bot_id一致
+  const patToken = siteConfig('COZE_PAT_TOKEN', '') // 填入在Playground测试成功的完整PAT令牌
+
+  // 3. 可自定义的UI文案（可按需修改或通过环境变量配置）
+  const userAvatar = siteConfig('COZE_USER_AVATAR', 'https://lf-coze-web-cdn.coze.cn/obj/eden-cn/lm-lgvj/ljhwZthlaukjlkulzlp/coze/coze-logo.png')
+  const botTitle = siteConfig('COZE_BOT_TITLE', 'Coze Bot')
+  const footerText = siteConfig('COZE_FOOTER_TEXT', 'Powered by NotionNext')
+
+  /**
+   * 关键修复：安全的令牌刷新函数
+   * 注意：此函数必须返回一个全新的、有效的令牌字符串。
+   * 在生产环境中，你应该调用自己的后端接口来刷新令牌，避免在前端硬编码密钥。
+   */
+  const handleRefreshToken = async () => {
+    console.log('[Coze] onRefreshToken 回调被触发，正在获取新令牌...');
+    // >>>>> 生产环境安全方案（强烈建议）<<<<<
+    // try {
+    //   // 调用你自己的后端API端点，该端点应返回一个新的有效PAT
+    //   const response = await fetch('/api/coze/refresh-token');
+    //   const data = await response.json();
+    //   if (data.newToken) {
+    //     return data.newToken;
+    //   }
+    //   throw new Error('无法从后端获取新令牌');
+    // } catch (error) {
+    //   console.error('[Coze] 刷新令牌失败:', error);
+    //   // 可以尝试返回原令牌，或抛出错误让SDK处理
+    //   return patToken;
+    // }
+
+    // >>>>> 临时调试方案（仅当确定当前PAT长期有效时使用）<<<<<
+    // 重要：如果初始化时就触发此回调并报401，说明当前`patToken`可能已过期或被SDK认为无效。
+    // 如果Playground测试成功但这里失败，请重点检查环境变量`COZE_PAT_TOKEN`是否已正确更新并部署。
+    return patToken;
+  };
 
   const loadCoze = async () => {
-    // 诊断日志：确认前端获取到的值
-    console.log('[Coze Debug] 环境变量 botId:', botId)
-    console.log('[Coze Debug] 环境变量 token 前6位:', cozeToken ? cozeToken.substring(0, 6) + '...' : '(空)')
-
-    if (!botId || !cozeToken) {
-      console.error('[Coze Error] 缺少 botId 或 token，请检查环境变量 COZE_BOT_ID 和 COZE_PAT_TOKEN')
-      return
+    // 基础校验
+    if (!botId || !patToken) {
+      console.warn('[Coze] 缺少必要的配置: COZE_BOT_ID 或 COZE_PAT_TOKEN');
+      return;
     }
+    console.log('[Coze] 开始加载，Bot ID:', botId);
 
     try {
-      // 加载SDK脚本
-      await loadExternalResource(cozeSrc)
-      const CozeWebSDK = window?.CozeWebSDK
-
-      if (!CozeWebSDK) {
-        throw new Error('CozeWebSDK 全局对象未加载成功，请检查脚本地址或网络')
+      // 动态加载SDK脚本
+      await loadExternalResource(cozeSrc);
+      if (!window.CozeWebSDK) {
+        throw new Error('CozeWebSDK 对象未加载成功');
       }
 
-      console.log('[Coze Debug] SDK加载成功，开始初始化...')
-
-      // 重要修改：完全按照官方Playground成功示例的结构
-      const cozeClient = new CozeWebSDK.WebChatClient({
-        // 修复：config 对象只包含 bot_id，确保没有 server 参数
+      // 核心配置：与Playground完全一致
+      const client = new window.CozeWebSDK.WebChatClient({
         config: {
-          bot_id: botId,
-          // 重要：已移除 server: 'https://api.coze.cn' 这一行
+          type: 'bot',          // 明确指定类型为机器人
+          bot_id: botId,        // 使用环境变量中的Bot ID
+          isIframe: false,
         },
-        // 修复：auth 对象严格遵循官方格式
         auth: {
           type: 'token',
-          token: cozeToken, // 使用从环境变量获取的新令牌
-          // 重要修改：onRefreshToken 必须返回一个新的令牌字符串
-          // 当前测试阶段，可暂时让它也返回同一个有效令牌（仅用于调试）
-          onRefreshToken: async function () {
-            console.log('[Coze Debug] onRefreshToken 回调被触发')
-            // 注意：在生产环境中，这里应调用你的后端接口来获取一个全新的、有效的令牌
-            // 示例安全做法：
-            // const response = await fetch('/api/refresh-coze-token');
-            // const { newToken } = await response.json();
-            // return newToken;
-            
-            // 临时调试方案（确认令牌有效时可使用）：
-            // 直接返回当前令牌。如果初始化就因此报401，说明当前cozeToken可能仍有问题。
-            return cozeToken
-          }
+          token: patToken,      // 使用环境变量中的初始令牌
+          onRefreshToken: handleRefreshToken // 指向安全的刷新函数
         },
-        componentProps: {
-          title: title || 'AI助手',
-          theme: 'light',
-          show_switch_theme: true,
-          width: 400,
-          height: 600,
-          // 可选：固定位置，避免布局跳动
-          position: 'fixed',
-          right: '20px',
-          bottom: '20px'
+        userInfo: {
+          id: 'user',
+          url: userAvatar,
+          nickname: 'User',
         },
-        onError: (error) => {
-          console.error('[Coze SDK Error]', error)
-          // 可根据错误类型细化处理，例如网络错误提示
-          if (error.message && error.message.includes('network')) {
-            console.warn('网络异常，可尝试重新加载')
-          }
+        ui: {
+          base: {
+            icon: 'https://lf-coze-web-cdn.coze.cn/obj/eden-cn/lm-lgvj/ljhwZthlaukjlkulzlp/coze/chatsdk-logo.png',
+            layout: 'pc',
+            lang: 'en',
+            zIndex: 1000
+          },
+          header: {
+            isShow: true,
+            isNeedClose: true,
+          },
+          asstBtn: {
+            isNeed: true
+          },
+          footer: {
+            isShow: true,
+            expressionText: footerText, // 使用配置的页脚文本
+          },
+          conversations: {
+            isNeed: true,
+          },
+          chatBot: {
+            title: botTitle, // 使用配置的聊天框标题
+            uploadable: true,
+            width: 390,
+          },
         },
-        // 可选：监听消息
-        onMessage: (message) => {
-          console.log('[Coze Message]', message)
-        }
-      })
+      });
 
-      console.log('[Coze Debug] 客户端初始化完成，等待WebSocket连接...')
+      console.log('[Coze] 客户端初始化成功，等待连接...');
 
     } catch (error) {
-      console.error('[Coze Initialization Failed]', error)
+      console.error('[Coze] 初始化失败:', error);
     }
-  }
+  };
 
+  // 在组件挂载时执行
   useEffect(() => {
-    // 确保只在客户端执行
-    if (typeof window !== 'undefined') {
-      loadCoze()
-    }
-  }, []) // 空依赖数组，只运行一次
+    loadCoze();
+  }, []);
 
-  // 本组件不渲染任何内容
-  return null
+  // 此组件不渲染任何可见DOM
+  return null;
 }
