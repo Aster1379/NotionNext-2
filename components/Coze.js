@@ -7,7 +7,7 @@ export default function Coze() {
   // 核心：仅读取环境变量，不做任何额外处理
   const botId = siteConfig('COZE_BOT_ID')
   const patToken = siteConfig('COZE_PAT_TOKEN')
-  const sdkUrl = siteConfig('COZE_SRC_URL', 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0/libs/cn/index.js')
+  const sdkUrl = siteConfig('COZE_SRC_URL', 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.10/libs/cn/index.js')
 
   useEffect(() => {
     // 防止重复初始化
@@ -27,7 +27,7 @@ export default function Coze() {
             isIframe: false,
           },
           auth: {
-            type: 'pat_token',
+            type: 'token',
             token: patToken,
             onRefreshToken: async () => patToken // 简化为直接返回原令牌
           },
