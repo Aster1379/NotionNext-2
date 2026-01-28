@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react'
 export default function Coze() {
   const isInitialized = useRef(false)
 
-  // 【核心修正】传入空对象{}作为第三个参数，绕过NOTION_CONFIG的读取
-  const botId = siteConfig('COZE_BOT_ID', '7591009318518964262', {})
-  const patToken = siteConfig('COZE_PAT_TOKEN', '', {})
-  const sdkUrl = siteConfig('COZE_SRC_URL', 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0/libs/cn/index.js', {})
+  // 【核心修正】传递正确的 key，让 siteConfig 按优先级读取
+  const botId = siteConfig('NEXT_PUBLIC_COZE_BOT_ID', '7591009318518964262')
+  const patToken = siteConfig('NEXT_PUBLIC_COZE_PAT_TOKEN', '')
+  const sdkUrl = siteConfig('NEXT_PUBLIC_COZE_SRC_URL', 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0/libs/cn/index.js')
 
   // 部署后验证日志
   console.group('[Coze 配置验证]')
@@ -20,12 +20,12 @@ export default function Coze() {
     // 严格检查：缺少关键配置则静默退出
     if (isInitialized.current || !botId || !patToken) {
       if (!botId || !patToken) {
-        console.warn('[Coze] 初始化中止：缺少 COZE_BOT_ID 或 COZE_PAT_TOKEN 配置。')
+        console.warn('[Coze] 初始化中止：缺少 NEXT_PUBLIC_COZE_BOT_ID 或 NEXT_PUBLIC_COZE_PAT_TOKEN 配置。')
       }
       return
     }
-    isInitialized.current = true
 
+    isInitialized.current = true
     console.log('[Coze] 开始初始化...')
 
     const initializeCoze = () => {
@@ -39,7 +39,6 @@ export default function Coze() {
           auth: {
             type: 'token',
             token: patToken,
-            // 简化处理，生产环境应实现安全的后端刷新
             onRefreshToken: async () => {
               console.log('[Coze] Token刷新回调被触发')
               return patToken
@@ -55,13 +54,22 @@ export default function Coze() {
               lang: 'en',
               zIndex: 1000
             },
-            header: { isShow: true, isNeedClose: true },
-            asstBtn: { isNeed: true },
-            footer: { isShow: false }, // 简化UI，避免页脚问题
-            conversations: { isNeed: true },
+            header: {
+              isShow: true,
+              isNeedClose: true
+            },
+            asstBtn: {
+              isNeed: true
+            },
+            footer: {
+              isShow: false
+            },
+            conversations: {
+              isNeed: true
+            },
             chatBot: {
-              title: siteConfig('COZE_BOT_TITLE', '助手', {}),
-              uploadable: false, // 关闭上传简化配置
+              title: siteConfig('NEXT_PUBLIC_COZE_BOT_TITLE', '助手'),
+              uploadable: false,
               width: 390,
             },
           },
@@ -92,8 +100,7 @@ export default function Coze() {
       console.error('[Coze] 无法加载SDK脚本，请检查网络或地址: ', sdkUrl)
     }
     document.body.appendChild(script)
-
-  }, [botId, patToken, sdkUrl]) // 依赖项
+  }, [botId, patToken, sdkUrl])
 
   // 本组件不渲染任何可见内容
   return null
