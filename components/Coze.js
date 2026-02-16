@@ -5,8 +5,8 @@ export default function Coze() {
   const isInitialized = useRef(false)
 
   // 【核心修正】传递正确的 key，让 siteConfig 按优先级读取
-  const botId = siteConfig('NEXT_PUBLIC_COZE_BOT_ID', '7607333574685409318')
-  const patToken = siteConfig('NEXT_PUBLIC_COZE_PAT_TOKEN', '')
+ const botId = siteConfig('COZE_BOT_ID', '7607333574685409318')
+const patToken = siteConfig('COZE_PAT_TOKEN', '')
   const sdkUrl = siteConfig('NEXT_PUBLIC_COZE_SRC_URL', 'https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0/libs/cn/index.js')
 
   // 部署后验证日志
