@@ -33,7 +33,7 @@ export default function Coze() {
         new window.CozeWebSDK.WebChatClient({
           config: {
             type: 'bot',
-            bot_id: botId, // 此时应为正确的 7591009318518964262
+            bot_id: botId,
             isIframe: false,
           },
           auth: {
@@ -68,7 +68,7 @@ export default function Coze() {
               isNeed: true
             },
             chatBot: {
-              title: siteConfig('NEXT_PUBLIC_COZE_BOT_TITLE', '助手'),
+              title: siteConfig('NEXT_PUBLIC_COZE_BOT_TITLE', '智子5号'),
               uploadable: false,
               width: 390,
             },
