@@ -28,8 +28,8 @@ const BLOG = {
   ENABLE_RSS: process.env.NEXT_PUBLIC_ENABLE_RSS || true, // 是否开启RSS订阅功能
   // blog.config.js 示例
 
-  COZE_BOT_ID: process.env.COZE_BOT_ID || '7591009318518964262', // 正确的新ID
-  COZE_PAT_TOKEN: process.env.COZE_PAT_TOKEN || 'pat_Wq3suBwaP7yhlLDCtUTKvxEiazya9rHrTkSRov0cn0lMucdTkR9y4JxbUqAfbsDr',
+  COZE_BOT_ID: process.env.COZE_BOT_ID || '7607333574685409318', // 正确的新ID
+  COZE_PAT_TOKEN: process.env.COZE_PAT_TOKEN || 'pat_lDZXBTzcL7NQCBApxqpAra1ivpvfRsUJ8soThYtIHoE6cE54yZYionAMq4fT5GMX',
 
 
   // 其它复杂配置
